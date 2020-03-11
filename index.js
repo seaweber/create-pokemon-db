@@ -1,6 +1,6 @@
 const fs = require('fs');
 
-// Helpful method that Node doesn't support yet
+// Helpful method that Node doesn't support yet, so this is someone's unofficial implementation of it
 // Converts [ ['foo', 'bar'], ['cash', 'money'] ] into { foo: 'bar', cash: 'money' }
 const fromEntries = require('object.fromentries');
 
