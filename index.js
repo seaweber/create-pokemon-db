@@ -24,10 +24,6 @@ async function getPokemonList() {
             {
               "name": "venusaur",
               "url": "https://pokeapi.co/api/v2/pokemon/3/"
-            },
-            {
-              "name": "charmander",
-              "url": "https://pokeapi.co/api/v2/pokemon/4/"
             }
          */
         const response = await instance.get('pokemon/?limit=493');
