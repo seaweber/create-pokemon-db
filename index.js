@@ -1,34 +1,42 @@
-const axios = require('axios');
+const fs = require('fs');
 
-const instance = axios.create({
-    baseURL: 'https://pokeapi.co/api/v2/',
-    timeout: 50000
-});
+// Helpful method that Node doesn't support yet
+// Converts [ ['foo', 'bar'], ['cash', 'money'] ] into { foo: 'bar', cash: 'money' }
+const fromEntries = require('object.fromentries');
 
-// Want to use async/await? Add the `async` keyword to your outer function/method.
+// 493 requests (for each pokemon) all at once will break, this helper class maintains a queue of a limited number of requests at once,
+// and they will all come in *eventually*
+const instance = require('./api').api;
+
 async function getPokemonList() {
 
     try {
-        const response = await instance.get('pokemon/?limit=493');
-        // console.log(response.data.results);
-
-        const list = response.data.results.map( async pokemon => {
-            const response = await instance.get(`pokemon/${ pokemon.name }`);
-            // console.log(response);
-            return {
-                id: response.data.id,
-                name: response.data.name,
-                sprite: {
-                    front: response.data.sprites["front_default"],
-                    back: response.data.sprites["back_default"]
-                },
-                stats: response.data.stats.map( stat => { return { [stat.stat.name]: stat.base_stat} }  ),
-                types: response.data.types.map( type => type.type.name )
+        // returns an array of objects containing endpoints for specific pokemon
+        /* EXAMPLE
+            {
+              "name": "bulbasaur",
+              "url": "https://pokeapi.co/api/v2/pokemon/1/"
+            },
+            {
+              "name": "ivysaur",
+              "url": "https://pokeapi.co/api/v2/pokemon/2/"
+            },
+            {
+              "name": "venusaur",
+              "url": "https://pokeapi.co/api/v2/pokemon/3/"
+            },
+            {
+              "name": "charmander",
+              "url": "https://pokeapi.co/api/v2/pokemon/4/"
             }
+         */
+        const response = await instance.get('pokemon/?limit=493');
 
+        // Iterate over this list and retrieve data for each individual pokemon
+        return response.data.results.map( pokemon => {
+            return instance.get(`pokemon/${ pokemon.name }`);
         });
 
-        return Promise.all(list);
 
     } catch (error) {
         console.error(error);
@@ -36,34 +44,38 @@ async function getPokemonList() {
 }
 
 const start = async () => {
-    const fs = require('fs');
-    const data = await getPokemonList();
 
-    fs.writeFile("pokemon.json", data, function(err) {
-        if (err) {
-            console.log(err);
-        }
+    // getPokemonList() is async and thus returns a list of Promises. Promises will automatically resolve into data once that data comes in from the internet.
+    // Promise.all() will pause code execution until all of the promises resolve
+    Promise.all(await getPokemonList())
+        // data is the array of responses ONCE THEY'VE ALL COME IN, and each promise has resolved
+        .then( responses => {
+
+            const formattedData = responses.map( response => {
+
+                const data = response.data;
+                // Given the response data, take the data we need and structure how we want
+                return {
+                    id: data.id,
+                    name: data.name,
+                    sprite: {
+                        front: data.sprites["front_default"],
+                        back: data.sprites["back_default"]
+                    },
+                    stats: fromEntries(data.stats.map( stat => [stat.stat.name, stat.base_stat] )),
+                    types: data.types.map( type => type.type.name )
+                }
+        // Since responses came in asynchronously, they'll probably be out of order in the array so sort them by ID
+        }).sort(( {id: a}, {id: b} ) => a - b );
+
+        // Write results to .json file
+        fs.writeFile("pokemon.json", JSON.stringify(formattedData), function(err) {
+            if (err) {
+                console.log(err);
+            }
+        });
     });
-    //console.log(bigData);
+
 };
 
 start();
-
-// .then( response => {
-//     response.data.results.forEach( async pokemon => {
-//         return await instance.get(`pokemon/${ pokemon.name }`).then( response => {
-//             console.log({
-//                 id: response.id,
-//                 name: response.name,
-//                 sprite: {
-//                     front: response.sprites["front_default"],
-//                     back: response.sprites["back_default"]
-//                 },
-//                 stats: response.stats.map( stat => { return { [stat.stat.name]: stat.base_stat} }  ),
-//                 types: response.types.map( type => type.type.name )
-//             });
-//             //console.log(bigData);
-//         });
-//
-//     });
-// });
